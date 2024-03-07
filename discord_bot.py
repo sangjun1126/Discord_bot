@@ -1,7 +1,9 @@
 import discord
 from datetime import datetime
+from difflib import get_close_matches
  
-# 토큰과 나머지는 미공개
+# 토큰은 알아서 넣으셈 ㅇㅇ
+ 
 class Champion :
     def __init__(self, name, description) :
         self.name = name
@@ -182,21 +184,31 @@ class MyClient(discord.Client):
 
     async def on_ready(self):
         print('Logged on as {0}!'.format(self.user))
-        await self.change_presence(status=discord.Status.online, activity=discord.Game("대기중"))
+        await self.change_presence(status=discord.Status.online, activity=discord.Game("대기"))
 
     async def on_message(self, message):
         if message.author == self.user:
             return
 
-        if message.content == 'ping':
-            await message.channel.send('pong {0.author.mention}'.format(message))
+        if message.content.lower().strip() == '예':
+            await self.send_champion_info(message)
+        elif message.content.lower().strip() == '아니오':
+            await message.channel.send('좋아요. 다른 질문이 있으면 물어봐주세요!')
         else:
             answer = self.get_answer(message.content)
             await message.channel.send(answer)
 
+    async def send_champion_info(self, message):
+        # 예/아니오 버튼 전송
+        embed = discord.Embed(title='가렌 정보', description='가렌에 대한 정보입니다.')
+        embed.add_field(name='이름', value=self.champions['가렌'].name)
+        embed.add_field(name='설명', value=self.champions['가렌'].description)
+        msg = await message.channel.send(embed=embed)
+        await msg.add_reaction('👍')  # 예 버튼
+        await msg.add_reaction('👎')  # 아니오 버튼
+
     def get_day_of_week(self):
         weekday_list = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
-
         weekday = weekday_list[datetime.today().weekday()]
         date = datetime.today().strftime("%Y년 %m월 %d일")
         result = '{}({})'.format(date, weekday)
@@ -208,30 +220,28 @@ class MyClient(discord.Client):
     def get_answer(self, text):
         trim_text = text.replace(" ", "")
 
-        answer_dict = {
-            '안녕': '안녕하세요. 상준 봇입니다.',
-            '요일': ':calendar: 오늘은 {}입니다'.format(self.get_day_of_week()),
-            '시간': ':clock9: 현재 시간은 {}입니다.'.format(self.get_time()),
-        }
-
         if trim_text == '' or None:
             return "알 수 없는 질문이에요. 답변을 드릴 수 없네요."
-        elif trim_text in answer_dict.keys():
-            return answer_dict[trim_text]
         elif trim_text in self.champions:
-            return '{} 꿀팁이에요. {}'.format(self.champions[trim_text].name, self.champions[trim_text].description)
+            return '{} 챔피언에 대한 꿀팁이에요. {}'.format(self.champions[trim_text].name, self.champions[trim_text].description)
         else:
+            answer_dict = {
+                '요일': ':calendar: 오늘은 {}입니다'.format(self.get_day_of_week()),
+                '시간': ':clock9: 현재 시간은 {}입니다.'.format(self.get_time()),
+            }
+            
             for key in answer_dict.keys():
-                if key.find(trim_text) != -1:
-                    return "연관 단어 [" + key + "]에 대한 답변입니다.\n" + answer_dict[key]
+                if trim_text == key:
+                    return answer_dict[key]
 
-            for key in answer_dict.keys():
-                if answer_dict[key].find(text[1:]) != -1:
-                    return "질문과 가장 유사한 질문 [" + key + "]에 대한 답변이에요.\n" + answer_dict[key]
-
-        return text + "은(는) 없는 질문입니다."
+            # 가장 유사한 검색어 찾기
+            matches = get_close_matches(trim_text, self.champions.keys(), n=1, cutoff=0.8)  # 유사도 임계값을 0.8로 설정
+            if matches:
+                return '유사한 단어를 찾았습니다: "{}". 이에 대한 정보를 보시겠습니까? (예/아니오)'.format(matches[0])
+            else:
+                return "해당하는 정보가 없습니다. 다른 질문을 해주세요."
 
 intents = discord.Intents.default()
 intents.message_content = True
 client = MyClient(intents=intents)
-# client.run(TOKEN)
+client.run(TOKEN)
